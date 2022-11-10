@@ -6,9 +6,22 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #define SERVER_PORT 1052 // we have 1050 range
 #define BUF_SIZE 256
+
+void command_load(char *args)
+{
+}
+
+void command_store(char *args)
+{
+}
+
+void command_remove(char *args)
+{
+}
 
 int main(int argc, char *argv[])
 {
@@ -16,7 +29,7 @@ int main(int argc, char *argv[])
 
     // These are the buffers to talk back and forth with the server
     char sendLine[BUF_SIZE];
-    char receiveLine[BUF_SIZE] = "rm filename";
+    char receiveLine[BUF_SIZE] = "store filename n:contents";
 
     // // Create socket to server
     // if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -54,24 +67,46 @@ int main(int argc, char *argv[])
 
     // Now start reading from the server
     // Read will read from socket into receiveLine up to BUF_SIZE
-    //while ((bytesRead = read(serverSocket, receiveLine, BUF_SIZE)) > 0)
+    // while ((bytesRead = read(serverSocket, receiveLine, BUF_SIZE)) > 0)
     {
         bytesRead = 26;
-        //receiveLine[bytesRead] = 0; // Make sure we put the null terminator at the end of the buffer
-        //printf("Received %d bytes from server with message: %s\n", bytesRead, receiveLine);
+        // receiveLine[bytesRead] = 0; // Make sure we put the null terminator at the end of the buffer
+        // printf("Received %d bytes from server with message: %s\n", bytesRead, receiveLine);
 
         char command_buffer[10];
+        int command_size = 0; // NOTE: Might be off by 1
+        char args_buffer[100];
+        bool is_command = true;
         for (int i = 0; i < bytesRead; i++)
         {
-            if (receiveLine[i] != ' ')
+
+            if (is_command)
             {
-                command_buffer[i] = receiveLine[i];
+                if (receiveLine[i] != ' ')
+                {
+                    command_buffer[i] = receiveLine[i];
+                }
+                else
+                {
+                    command_buffer[i] = '\0';
+                    is_command = false;
+                    command_size = i;
+                }
             }
             else
             {
-                command_buffer[i] = '\0';
+                if (receiveLine[i] != '\0')
+                {
+                    args_buffer[i - command_size - 1] = receiveLine[i];
+                }
+                else
+                {
+                    break;
+                }
             }
         }
+
+        printf("ARGS: %s\n", args_buffer);
 
         if (strcmp(command_buffer, "load") == 0)
         {
@@ -87,9 +122,9 @@ int main(int argc, char *argv[])
         }
 
         // Got response, get out of here
-        //break;
+        // break;
     }
 
     // Close the server socket
-    //close(serverSocket);
+    // close(serverSocket);
 }
