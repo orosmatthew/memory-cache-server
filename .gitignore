@@ -1,3 +1,9 @@
+# vscode
+.vscode
+
+# build dir
+build
+
 # Created by https://www.toptal.com/developers/gitignore/api/c,c++,jetbrains+all,clion+all,visualstudiocode,visualstudio
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,c++,jetbrains+all,clion+all,visualstudiocode,visualstudio
 
