@@ -125,6 +125,59 @@ void command_remove(char *args)
 {
 }
 
+void process_input(int input_size, char *input) {
+        // receiveLine[bytesRead] = 0; // Make sure we put the null terminator at the end of the buffer
+        // printf("Received %d bytes from server with message: %s\n", bytesRead, receiveLine);
+
+        char command_buffer[10];
+        int command_size = 0; // NOTE: Might be off by 1
+        char args_buffer[100];
+        bool is_command = true;
+        for (int i = 0; i < input_size; i++)
+        {
+            if (is_command)
+            {
+                if (input[i] != ' ')
+                {
+                    command_buffer[i] = input[i];
+                }
+                else
+                {
+                    command_buffer[i] = '\0';
+                    is_command = false;
+                    command_size = i;
+                }
+            }
+            else
+            {
+                if (input[i] != '\0')
+                {
+                    args_buffer[i - command_size - 1] = input[i];
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        printf("ARGS: %s\n", args_buffer);
+
+        if (strcmp(command_buffer, "load") == 0)
+        {
+            printf("LOAD\n");
+        }
+        if (strcmp(command_buffer, "store") == 0)
+        {
+            printf("STORE\n");
+            command_store(strlen(args_buffer), args_buffer);
+        }
+        if (strcmp(command_buffer, "rm") == 0)
+        {
+            printf("DELETE\n");
+        }
+    }
+
 int main(int argc, char *argv[])
 {
     memset(&cache, 0, sizeof(Cache));
@@ -172,62 +225,7 @@ int main(int argc, char *argv[])
     // Now start reading from the server
     // Read will read from socket into receiveLine up to BUF_SIZE
     // while ((bytesRead = read(serverSocket, receiveLine, BUF_SIZE)) > 0)
-    {
-        bytesRead = 26;
-        // receiveLine[bytesRead] = 0; // Make sure we put the null terminator at the end of the buffer
-        // printf("Received %d bytes from server with message: %s\n", bytesRead, receiveLine);
-
-        char command_buffer[10];
-        int command_size = 0; // NOTE: Might be off by 1
-        char args_buffer[100];
-        bool is_command = true;
-        for (int i = 0; i < bytesRead; i++)
-        {
-            if (is_command)
-            {
-                if (receiveLine[i] != ' ')
-                {
-                    command_buffer[i] = receiveLine[i];
-                }
-                else
-                {
-                    command_buffer[i] = '\0';
-                    is_command = false;
-                    command_size = i;
-                }
-            }
-            else
-            {
-                if (receiveLine[i] != '\0')
-                {
-                    args_buffer[i - command_size - 1] = receiveLine[i];
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-
-        printf("ARGS: %s\n", args_buffer);
-
-        if (strcmp(command_buffer, "load") == 0)
-        {
-            printf("LOAD\n");
-        }
-        if (strcmp(command_buffer, "store") == 0)
-        {
-            printf("STORE\n");
-            command_store(strlen(args_buffer), args_buffer);
-        }
-        if (strcmp(command_buffer, "rm") == 0)
-        {
-            printf("DELETE\n");
-        }
-
-        // Got response, get out of here
-        // break;
-    }
+    process_input(26, "store filename 9:qwertyuio");
 
     // Close the server socket
     // close(serverSocket);
