@@ -88,7 +88,7 @@ void command_load(char arg_size, char *args)
 	}
     }
     for (int i = 0; i <  CACHE_SIZE + 1; i++){
-	if (strcmp(cache.entries[i].filename, filename) == 0){
+	if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid){
             print_cache_specific(true, i);
 	    break;
 	}
