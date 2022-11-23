@@ -32,6 +32,27 @@ typedef struct _cache
 pthread_mutex_t cache_mutex = PTHREAD_MUTEX_INITIALIZER;
 Cache cache;
 
+void print_cache_specific(bool existsInCache, int entryIndex){
+    pthread_mutex_lock(&cache_mutex);
+    printf("\nCACHE:\n");
+    if (existsInCache == 1)
+    {
+        printf("===================\n");
+        printf("FILENAME: %s\n", cache.entries[entryIndex].filename);
+        printf("BYTES: %d\n", cache.entries[entryIndex].n_bytes);
+        printf("CONTENTS: %s\n", cache.entries[entryIndex].p_contents);
+        printf("===================\n");
+    }
+    else{
+        printf("===================\n");
+        printf("FILENAME: FILE DOES NOT EXIST\n");
+        printf("BYTES: 0");
+        printf("CONTENTS: \n");
+        printf("===================\n");
+    }
+    pthread_mutex_unlock(&cache_mutex);
+}
+
 void print_cache()
 {
     pthread_mutex_lock(&cache_mutex);
@@ -55,8 +76,26 @@ int hash_filename(char *filename)
     return (int)(filename[0]);
 }
 
-void command_load(char *args)
+void command_load(char arg_size, char *args)
 {
+    char filename[FILENAME_SIZE];
+    for (int i = 0; i < arg_size + 1; i++){
+        if (args[i] != ' '){
+            filename[i] = args[i];
+	}
+	else{
+            filename[i] = '\0';
+	}
+    }
+    for (int i = 0; i <  CACHE_SIZE + 1; i++){
+	if (strcmp(cache.entries[i].filename, filename) == 0){
+            print_cache_specific(true, i);
+	    break;
+	}
+        else if (strcmp(cache.entries[i].filename, filename) == 1 && i == CACHE_SIZE){
+            print_cache_specific(false, 0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
+	}
+    }
 }
 
 void command_store(int arg_size, char *args)
