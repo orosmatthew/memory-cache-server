@@ -205,6 +205,7 @@ void process_input(int input_size, char *input) {
         if (strcmp(command_buffer, "load") == 0)
         {
             printf("LOAD\n");
+	    command_load(strlen(args_buffer), args_buffer);
         }
         if (strcmp(command_buffer, "store") == 0)
         {
