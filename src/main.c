@@ -90,17 +90,16 @@ void command_load(size_t arg_size, const char* args)
             filename[i] = '\0';
         }
     }
-    for (int i = 0; i < CACHE_SIZE; i++)
+    
+    int index = hash_filename(filename) % CACHE_SIZE;
+    if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid)
     {
-        if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid)
-        {
-            print_cache_specific(true, i);
-            break;
-        } else if (strcmp(cache.entries[i].filename, filename) != 0 && i == CACHE_SIZE)
-        {
-            print_cache_specific(false,
-                                 0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
-        }
+        print_cache_specific(true, index);
+        break;
+    } 
+    else if (strcmp(cache.entries[index].filename, filename) != 0 || cache.entries[index].is_valid)
+    {
+       print_cache_specific(false, 0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
     }
 }
 
@@ -177,30 +176,25 @@ void command_remove(size_t arg_size, const char* args)
             filename[i] = '\0';
         }
     }
-    for (int i = 0; i < CACHE_SIZE; i++)
+    
+    int index = hash_filename(filename) % CACHE_SIZE;
+    if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid)
     {
-        if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid)
-        {
-            cache.entries[i].is_valid = false;
-            printf("===================\n");
-            printf("SUCCESSFULLY REMOVED FILE: %s\n", cache.entries[i].filename);
-            printf("===================\n");
-            break;
-        }
-            //this else statement is just saying if we've reached the end of the cache
-            //and the filename isn't in the cache at all, or if the file name is in the cache but we have already set it's "is_valid" property to false
-            //then we want to tell the user the file doesn't exist
-        else if ((strcmp(cache.entries[i].filename, filename) != 0 ||
-                  ((strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid == false))) &&
-                 i == CACHE_SIZE)
-        {
-            printf("===================\n");
-            printf("SORRY BUT THE FILE YOU ARE ATTEMPTING TO REMOVE DOES NOT EXIST.\n");
-            printf("PLEASE CHECK SPELLING.\n");
-            printf("THE FILE NAME YOU TYPED WAS: %s\n", filename);
-            printf("===================\n");
+        cache.entries[index].is_valid = false;
+        printf("===================\n");
+        printf("SUCCESSFULLY REMOVED FILE: %s\n", cache.entries[index].filename);
+        printf("===================\n");
+        break;
+    }
+    else if ((strcmp(cache.entries[index].filename, filename) != 0 ||
+            ((strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid == false))))
+    {
+        printf("===================\n");
+        printf("SORRY BUT THE FILE YOU ARE ATTEMPTING TO REMOVE DOES NOT EXIST.\n");
+        printf("PLEASE CHECK SPELLING.\n");
+        printf("THE FILE NAME YOU TYPED WAS: %s\n", filename);
+        printf("===================\n");
 
-        }
     }
 }
 
