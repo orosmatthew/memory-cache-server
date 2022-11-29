@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <signal.h>
+
 
 #define SERVER_PORT 1052 // we have 1050 range
 #define BUF_SIZE 256
@@ -257,15 +259,23 @@ void process_input(size_t input_size, const char* input)
     }
 }
 
+int serverSocket;
+
+void closeConnection() {
+	printf("\nClosing Connection\n");
+	close(serverSocket);
+	exit(1);
+}
+
 int main(int argc, char* argv[])
 {
     memset(&cache, 0, sizeof(Cache));
 
-    int serverSocket, bytesRead;
 
     // These are the buffers to talk back and forth with the server
     char sendLine[BUF_SIZE];
-    char receiveLine[BUF_SIZE] = "store filename 9:qwertyuio";
+    //char receiveLine[BUF_SIZE] = "store filename 9:qwertyuio";
+		char receiveLine[BUF_SIZE];
 
     // // Create socket to server
     // if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -273,6 +283,42 @@ int main(int argc, char* argv[])
     //     printf("Unable to create socket\n");
     //     return -1;
     // }
+
+		int connectionToClient;
+		int bytesRead = 0;
+
+		serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+		struct sockaddr_in serverAddress;
+		bzero(&serverAddress, sizeof(serverAddress));
+		serverAddress.sin_family = AF_INET;
+
+		serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+		serverAddress.sin_port = htons(SERVER_PORT);
+
+		if (bind(serverSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) == -1) {
+			printf("Unable to bind port\n");
+			exit(-1);
+		}
+
+		struct sigaction sigIntHandler;
+		sigIntHandler.sa_handler = closeConnection;
+		sigIntHandler.sa_flags = 0;
+
+		sigaction(SIGINT, &sigIntHandler, NULL);
+
+		listen(serverSocket, 10);
+
+		while (1) {
+			connectionToClient = accept(serverSocket, (struct sockaddr *) NULL, NULL);
+		
+
+		//int connectionToClient = *(int *)&connectionToClient;
+
+			while ((bytesRead = read(connectionToClient, receiveLine, BUF_SIZE)) > 0) {
+				receiveLine[bytesRead] = 0;
+				printf("Received: %s\n", receiveLine);
+			}
+		}
 
     // // Setup server connection
     // struct sockaddr_in serverAddress;
