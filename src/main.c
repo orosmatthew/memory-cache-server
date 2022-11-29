@@ -34,7 +34,6 @@ Cache cache;
 
 void print_cache_specific(bool existsInCache, int entryIndex)
 {
-    pthread_mutex_lock(&cache_mutex);
     printf("\nCACHE:\n");
     if (existsInCache == 1 && entryIndex < 8)
     {
@@ -51,12 +50,10 @@ void print_cache_specific(bool existsInCache, int entryIndex)
         printf("CONTENTS: \n");
         printf("===================\n");
     }
-    pthread_mutex_unlock(&cache_mutex);
 }
 
 void print_cache()
 {
-    pthread_mutex_lock(&cache_mutex);
     printf("\nCACHE:\n");
     for (int i = 0; i < CACHE_SIZE; i++)
     {
@@ -69,7 +66,6 @@ void print_cache()
             printf("===================\n");
         }
     }
-    pthread_mutex_unlock(&cache_mutex);
 }
 
 int hash_filename(char* filename)
@@ -90,16 +86,19 @@ void command_load(size_t arg_size, const char* args)
             filename[i] = '\0';
         }
     }
-    
+
     int index = hash_filename(filename) % CACHE_SIZE;
+
+    pthread_mutex_lock(&cache_mutex);
     if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid)
     {
         print_cache_specific(true, index);
-    } 
-    else if (strcmp(cache.entries[index].filename, filename) != 0 || cache.entries[index].is_valid)
+    } else if (strcmp(cache.entries[index].filename, filename) != 0 || cache.entries[index].is_valid)
     {
-       print_cache_specific(false, 0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
+        print_cache_specific(false,
+                             0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
     }
+    pthread_mutex_unlock(&cache_mutex);
 }
 
 void command_store(size_t arg_size, const char* args)
@@ -158,42 +157,35 @@ void command_store(size_t arg_size, const char* args)
     }
     cache.entries[index] = entry;
     pthread_mutex_unlock(&cache_mutex);
-
-    print_cache();
 }
 
 void command_remove(size_t arg_size, const char* args)
 {
     char filename[FILENAME_SIZE];
-    for (int i = 0; i < arg_size + 1; i++)
+    for (int i = 0; i < FILENAME_SIZE || i < arg_size; i++)
     {
-        if (args[i] != ' ')
-        {
-            filename[i] = args[i];
-        } else
-        {
-            filename[i] = '\0';
-        }
+        filename[i] = args[i];
     }
-    
+
     int index = hash_filename(filename) % CACHE_SIZE;
+
+    pthread_mutex_lock(&cache_mutex);
     if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid)
     {
         cache.entries[index].is_valid = false;
         printf("===================\n");
         printf("SUCCESSFULLY REMOVED FILE: %s\n", cache.entries[index].filename);
         printf("===================\n");
-    }
-    else if ((strcmp(cache.entries[index].filename, filename) != 0 ||
-            ((strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid == false))))
+    } else if ((strcmp(cache.entries[index].filename, filename) != 0 ||
+                ((strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid == false))))
     {
         printf("===================\n");
         printf("SORRY BUT THE FILE YOU ARE ATTEMPTING TO REMOVE DOES NOT EXIST.\n");
         printf("PLEASE CHECK SPELLING.\n");
         printf("THE FILE NAME YOU TYPED WAS: %s\n", filename);
         printf("===================\n");
-
     }
+    pthread_mutex_unlock(&cache_mutex);
 }
 
 void process_input(size_t input_size, const char* input)
@@ -225,26 +217,22 @@ void process_input(size_t input_size, const char* input)
                 args_buffer[i - command_size - 1] = input[i];
             } else
             {
+                args_buffer[i - command_size - 1] = '\0';
                 break;
             }
         }
     }
 
-    printf("ARGS: %s\n", args_buffer);
-
     if (strcmp(command_buffer, "load") == 0)
     {
-        printf("LOAD\n");
         command_load(strlen(args_buffer), args_buffer);
     }
     if (strcmp(command_buffer, "store") == 0)
     {
-        printf("STORE\n");
         command_store(strlen(args_buffer), args_buffer);
     }
     if (strcmp(command_buffer, "rm") == 0)
     {
-        printf("DELETE\n");
         command_remove(strlen(args_buffer), args_buffer);
     }
 }
@@ -297,6 +285,14 @@ int main(int argc, char* argv[])
     // Read will read from socket into receiveLine up to BUF_SIZE
     // while ((bytesRead = read(serverSocket, receiveLine, BUF_SIZE)) > 0)
     process_input(26, "store filename 9:qwertyuio");
+    process_input(21, "store abc 9:qwertyuio");
+    process_input(21, "store agl 9:qwertyuio");
+    process_input(25, "store charles 9:qwertyuip");
+
+    process_input(13, "load charles");
+
+    process_input(12, "rm filename");
+
 
     // Close the server socket
     // close(serverSocket);
