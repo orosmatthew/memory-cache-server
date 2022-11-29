@@ -95,7 +95,6 @@ void command_load(size_t arg_size, const char* args)
     if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid)
     {
         print_cache_specific(true, index);
-        break;
     } 
     else if (strcmp(cache.entries[index].filename, filename) != 0 || cache.entries[index].is_valid)
     {
@@ -184,7 +183,6 @@ void command_remove(size_t arg_size, const char* args)
         printf("===================\n");
         printf("SUCCESSFULLY REMOVED FILE: %s\n", cache.entries[index].filename);
         printf("===================\n");
-        break;
     }
     else if ((strcmp(cache.entries[index].filename, filename) != 0 ||
             ((strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid == false))))
