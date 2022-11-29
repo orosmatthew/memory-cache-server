@@ -16,15 +16,15 @@
 #define FILENAME_SIZE 256
 #define FILE_CONTENT_SIZE 1024
 
-typedef struct _cache_entry
+typedef struct
 {
     char filename[FILENAME_SIZE];
     int n_bytes;
-    char *p_contents;
+    char* p_contents;
     bool is_valid;
 } CacheEntry;
 
-typedef struct _cache
+typedef struct
 {
     CacheEntry entries[CACHE_SIZE];
 } Cache;
@@ -32,18 +32,19 @@ typedef struct _cache
 pthread_mutex_t cache_mutex = PTHREAD_MUTEX_INITIALIZER;
 Cache cache;
 
-void print_cache_specific(bool existsInCache, int entryIndex){
+void print_cache_specific(bool existsInCache, int entryIndex)
+{
     pthread_mutex_lock(&cache_mutex);
     printf("\nCACHE:\n");
-    if (existsInCache == 1)
+    if (existsInCache == 1 && entryIndex < 8)
     {
         printf("===================\n");
         printf("FILENAME: %s\n", cache.entries[entryIndex].filename);
         printf("BYTES: %d\n", cache.entries[entryIndex].n_bytes);
         printf("CONTENTS: %s\n", cache.entries[entryIndex].p_contents);
         printf("===================\n");
-    }
-    else{
+    } else
+    {
         printf("===================\n");
         printf("FILENAME: FILE DOES NOT EXIST\n");
         printf("BYTES: 0");
@@ -71,38 +72,43 @@ void print_cache()
     pthread_mutex_unlock(&cache_mutex);
 }
 
-int hash_filename(char *filename)
+int hash_filename(char* filename)
 {
-    return (int)(filename[0]);
+    return (int) (filename[0]);
 }
 
-void command_load(char arg_size, char *args)
+void command_load(size_t arg_size, const char* args)
 {
     char filename[FILENAME_SIZE];
-    for (int i = 0; i < arg_size + 1; i++){
-        if (args[i] != ' '){
+    for (int i = 0; i < arg_size + 1; i++)
+    {
+        if (args[i] != ' ')
+        {
             filename[i] = args[i];
-	}
-	else{
+        } else
+        {
             filename[i] = '\0';
-	}
+        }
     }
-    for (int i = 0; i <  CACHE_SIZE + 1; i++){
-	if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid){
+    for (int i = 0; i < CACHE_SIZE; i++)
+    {
+        if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid)
+        {
             print_cache_specific(true, i);
-	    break;
-	}
-        else if (strcmp(cache.entries[i].filename, filename) == 1 && i == CACHE_SIZE){
-            print_cache_specific(false, 0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
-	}
+            break;
+        } else if (strcmp(cache.entries[i].filename, filename) != 0 && i == CACHE_SIZE)
+        {
+            print_cache_specific(false,
+                                 0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
+        }
     }
 }
 
-void command_store(int arg_size, char *args)
+void command_store(size_t arg_size, const char* args)
 {
     char filename[FILENAME_SIZE];
     char n_bytes_str[8];
-    char *contents = (char *)malloc(FILE_CONTENT_SIZE);
+    char* contents = (char*) malloc(FILE_CONTENT_SIZE);
 
     int step = 0;   // 0: filename, 1: n_bytes_str, 2: contents
     int offset = 0; // offset from last arg
@@ -112,8 +118,7 @@ void command_store(int arg_size, char *args)
         if (step == 0 && args[i] != ' ')
         {
             filename[i] = args[i];
-        }
-        else if (step == 0)
+        } else if (step == 0)
         {
             filename[i] = '\0';
             i++;
@@ -125,8 +130,7 @@ void command_store(int arg_size, char *args)
         if (step == 1 && args[i] != ':')
         {
             n_bytes_str[i - offset] = args[i];
-        }
-        else if (step == 1)
+        } else if (step == 1)
         {
             n_bytes_str[i - offset] = '\0';
             i++;
@@ -160,95 +164,100 @@ void command_store(int arg_size, char *args)
     print_cache();
 }
 
-void command_remove(char arg_size, char *args)
+void command_remove(size_t arg_size, const char* args)
 {
     char filename[FILENAME_SIZE];
-    for (int i = 0; i < arg_size + 1; i++){
-        if (args[i] != ' '){
+    for (int i = 0; i < arg_size + 1; i++)
+    {
+        if (args[i] != ' ')
+        {
             filename[i] = args[i];
-	}
-	else{
+        } else
+        {
             filename[i] = '\0';
-	}
+        }
     }
-    for (int i = 0; i <  CACHE_SIZE + 1; i++){
-	if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid){
-	    cache.entries[i].is_valid = false;
+    for (int i = 0; i < CACHE_SIZE; i++)
+    {
+        if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid)
+        {
+            cache.entries[i].is_valid = false;
             printf("===================\n");
             printf("SUCCESSFULLY REMOVED FILE: %s\n", cache.entries[i].filename);
             printf("===================\n");
-	    break;
-	}
-	//this else statement is just saying if we've reached the end of the cache 
-	//and the filename isn't in the cache at all, or if the file name is in the cache but we have already set it's "is_valid" property to false 
-	//then we want to tell the user the file doesn't exist
-        else if ((strcmp(cache.entries[i].filename, filename) == 1 || ((strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid == false))) && i == CACHE_SIZE){
+            break;
+        }
+            //this else statement is just saying if we've reached the end of the cache
+            //and the filename isn't in the cache at all, or if the file name is in the cache but we have already set it's "is_valid" property to false
+            //then we want to tell the user the file doesn't exist
+        else if ((strcmp(cache.entries[i].filename, filename) != 0 ||
+                  ((strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid == false))) &&
+                 i == CACHE_SIZE)
+        {
             printf("===================\n");
             printf("SORRY BUT THE FILE YOU ARE ATTEMPTING TO REMOVE DOES NOT EXIST.\n");
-	    printf("PLEASE CHECK SPELLING.\n");
-	    printf("THE FILE NAME YOU TYPED WAS: %s\n", filename);
+            printf("PLEASE CHECK SPELLING.\n");
+            printf("THE FILE NAME YOU TYPED WAS: %s\n", filename);
             printf("===================\n");
-	    
-	}
+
+        }
     }
 }
 
-void process_input(int input_size, char *input) {
-        // receiveLine[bytesRead] = 0; // Make sure we put the null terminator at the end of the buffer
-        // printf("Received %d bytes from server with message: %s\n", bytesRead, receiveLine);
+void process_input(size_t input_size, const char* input)
+{
+    // receiveLine[bytesRead] = 0; // Make sure we put the null terminator at the end of the buffer
+    // printf("Received %d bytes from server with message: %s\n", bytesRead, receiveLine);
 
-        char command_buffer[10];
-        int command_size = 0; // NOTE: Might be off by 1
-        char args_buffer[100];
-        bool is_command = true;
-        for (int i = 0; i < input_size; i++)
+    char command_buffer[10];
+    int command_size = 0; // NOTE: Might be off by 1
+    char args_buffer[100];
+    bool is_command = true;
+    for (int i = 0; i < input_size; i++)
+    {
+        if (is_command)
         {
-            if (is_command)
+            if (input[i] != ' ')
             {
-                if (input[i] != ' ')
-                {
-                    command_buffer[i] = input[i];
-                }
-                else
-                {
-                    command_buffer[i] = '\0';
-                    is_command = false;
-                    command_size = i;
-                }
-            }
-            else
+                command_buffer[i] = input[i];
+            } else
             {
-                if (input[i] != '\0')
-                {
-                    args_buffer[i - command_size - 1] = input[i];
-                }
-                else
-                {
-                    break;
-                }
+                command_buffer[i] = '\0';
+                is_command = false;
+                command_size = i;
             }
-        }
-
-        printf("ARGS: %s\n", args_buffer);
-
-        if (strcmp(command_buffer, "load") == 0)
+        } else
         {
-            printf("LOAD\n");
-	    command_load(strlen(args_buffer), args_buffer);
-        }
-        if (strcmp(command_buffer, "store") == 0)
-        {
-            printf("STORE\n");
-            command_store(strlen(args_buffer), args_buffer);
-        }
-        if (strcmp(command_buffer, "rm") == 0)
-        {
-            printf("DELETE\n");
-	    command_remove(strlen(args_buffer), args_buffer);
+            if (input[i] != '\0')
+            {
+                args_buffer[i - command_size - 1] = input[i];
+            } else
+            {
+                break;
+            }
         }
     }
 
-int main(int argc, char *argv[])
+    printf("ARGS: %s\n", args_buffer);
+
+    if (strcmp(command_buffer, "load") == 0)
+    {
+        printf("LOAD\n");
+        command_load(strlen(args_buffer), args_buffer);
+    }
+    if (strcmp(command_buffer, "store") == 0)
+    {
+        printf("STORE\n");
+        command_store(strlen(args_buffer), args_buffer);
+    }
+    if (strcmp(command_buffer, "rm") == 0)
+    {
+        printf("DELETE\n");
+        command_remove(strlen(args_buffer), args_buffer);
+    }
+}
+
+int main(int argc, char* argv[])
 {
     memset(&cache, 0, sizeof(Cache));
 
