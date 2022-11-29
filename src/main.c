@@ -93,7 +93,7 @@ void command_load(size_t arg_size, const char* args)
     if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid)
     {
         print_cache_specific(true, index);
-    } else if (strcmp(cache.entries[index].filename, filename) != 0 || cache.entries[index].is_valid)
+    } else if (strcmp(cache.entries[index].filename, filename) != 0 || !cache.entries[index].is_valid)
     {
         print_cache_specific(false,
                              0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
@@ -292,6 +292,8 @@ int main(int argc, char* argv[])
     process_input(13, "load charles");
 
     process_input(12, "rm filename");
+
+    process_input(13, "load filename");
 
 
     // Close the server socket
