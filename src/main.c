@@ -261,6 +261,7 @@ void process_input(size_t input_size, const char* input)
 
 int serverSocket;
 
+// Function to close socket connections
 void closeConnection() {
 	printf("\nClosing Connection\n");
 	close(serverSocket);
@@ -274,87 +275,53 @@ int main(int argc, char* argv[])
 
     // These are the buffers to talk back and forth with the server
     char sendLine[BUF_SIZE];
-    //char receiveLine[BUF_SIZE] = "store filename 9:qwertyuio";
 		char receiveLine[BUF_SIZE];
 
-    // // Create socket to server
-    // if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    // {
-    //     printf("Unable to create socket\n");
-    //     return -1;
-    // }
 
 		int connectionToClient;
 		int bytesRead = 0;
 
+		// Creating a server socket
 		serverSocket = socket(AF_INET, SOCK_STREAM, 0);
 		struct sockaddr_in serverAddress;
 		bzero(&serverAddress, sizeof(serverAddress));
 		serverAddress.sin_family = AF_INET;
 
+		// Configure to listen to any address and convert from host to network format
 		serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
 		serverAddress.sin_port = htons(SERVER_PORT);
 
+
+		// Bind to port, error message if failure to bind
 		if (bind(serverSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) == -1) {
-			printf("Unable to bind port\n");
+			printf("Unable to bind to port\n");
 			exit(-1);
 		}
 
+		// Allows for Ctrl+C to close connection
 		struct sigaction sigIntHandler;
 		sigIntHandler.sa_handler = closeConnection;
 		sigIntHandler.sa_flags = 0;
-
 		sigaction(SIGINT, &sigIntHandler, NULL);
+    
 
+		// Start listening for up to 10 connections
 		listen(serverSocket, 10);
 
 		while (1) {
 			connectionToClient = accept(serverSocket, (struct sockaddr *) NULL, NULL);
 		
-
-		//int connectionToClient = *(int *)&connectionToClient;
-
+			// Read command from client 
 			while ((bytesRead = read(connectionToClient, receiveLine, BUF_SIZE)) > 0) {
+				// Put NULL terminator at end
 				receiveLine[bytesRead] = 0;
-				//printf("Received: %s\n", receiveLine);
-				
-				process_input(bytesRead, receiveLine);
+
+				// Start thread to handle command input
+				pthread_t processThread;
+				//pthread_create(&processThread, NULL, process_input, (void *))
+				// Need to change process_input to allow for threading
+
 			}
 		}
 
-    // // Setup server connection
-    // struct sockaddr_in serverAddress;
-    // bzero(&serverAddress, sizeof(serverAddress)); // Ensure address is blank
-
-    // // Setup the type of connection and where the server is to connect to
-    // serverAddress.sin_family = AF_INET;          // AF_INET - talk over a network, could be a local socket
-    // serverAddress.sin_port = htons(SERVER_PORT); // Conver to network byte order
-
-    // // Try to convert character representation of IP to binary
-    // if (inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr) <= 0)
-    // {
-    //     printf("Unable to convert IP for server address\n");
-    //     return -1;
-    // }
-
-    // // Connect to server, if we cannot connect, then exit out
-    // if (connect(serverSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
-    // {
-    //     printf("Unable to connect to server");
-    // }
-
-    // // snprintf allows you to write to a buffer, think of it as a formatted print into an array
-    // snprintf(sendLine, sizeof(sendLine), "Hello Server");
-
-    // // Write will actually write to a file (in this case a socket) which will transmit it to the server
-    // write(serverSocket, sendLine, strlen(sendLine));
-
-    // Now start reading from the server
-    // Read will read from socket into receiveLine up to BUF_SIZE
-    // while ((bytesRead = read(serverSocket, receiveLine, BUF_SIZE)) > 0)
-    
-		//process_input(26, "store filename 9:qwertyuio");
-
-    // Close the server socket
-    // close(serverSocket);
-}
+}    
