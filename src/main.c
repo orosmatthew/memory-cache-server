@@ -316,7 +316,9 @@ int main(int argc, char* argv[])
 
 			while ((bytesRead = read(connectionToClient, receiveLine, BUF_SIZE)) > 0) {
 				receiveLine[bytesRead] = 0;
-				printf("Received: %s\n", receiveLine);
+				//printf("Received: %s\n", receiveLine);
+				
+				process_input(bytesRead, receiveLine);
 			}
 		}
 
@@ -350,7 +352,8 @@ int main(int argc, char* argv[])
     // Now start reading from the server
     // Read will read from socket into receiveLine up to BUF_SIZE
     // while ((bytesRead = read(serverSocket, receiveLine, BUF_SIZE)) > 0)
-    process_input(26, "store filename 9:qwertyuio");
+    
+		//process_input(26, "store filename 9:qwertyuio");
 
     // Close the server socket
     // close(serverSocket);
