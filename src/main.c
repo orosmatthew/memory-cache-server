@@ -36,7 +36,6 @@ Cache cache;
 
 void print_cache_specific(bool existsInCache, int entryIndex)
 {
-    pthread_mutex_lock(&cache_mutex);
     printf("\nCACHE:\n");
     if (existsInCache == 1 && entryIndex < 8)
     {
@@ -53,12 +52,10 @@ void print_cache_specific(bool existsInCache, int entryIndex)
         printf("CONTENTS: \n");
         printf("===================\n");
     }
-    pthread_mutex_unlock(&cache_mutex);
 }
 
 void print_cache()
 {
-    pthread_mutex_lock(&cache_mutex);
     printf("\nCACHE:\n");
     for (int i = 0; i < CACHE_SIZE; i++)
     {
@@ -71,7 +68,6 @@ void print_cache()
             printf("===================\n");
         }
     }
-    pthread_mutex_unlock(&cache_mutex);
 }
 
 int hash_filename(char* filename)
@@ -92,18 +88,19 @@ void command_load(size_t arg_size, const char* args)
             filename[i] = '\0';
         }
     }
-    for (int i = 0; i < CACHE_SIZE; i++)
+
+    int index = hash_filename(filename) % CACHE_SIZE;
+
+    pthread_mutex_lock(&cache_mutex);
+    if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid)
     {
-        if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid)
-        {
-            print_cache_specific(true, i);
-            break;
-        } else if (strcmp(cache.entries[i].filename, filename) != 0 && i == CACHE_SIZE)
-        {
-            print_cache_specific(false,
-                                 0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
-        }
+        print_cache_specific(true, index);
+    } else if (strcmp(cache.entries[index].filename, filename) != 0 || !cache.entries[index].is_valid)
+    {
+        print_cache_specific(false,
+                             0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
     }
+    pthread_mutex_unlock(&cache_mutex);
 }
 
 void command_store(size_t arg_size, const char* args)
@@ -162,48 +159,35 @@ void command_store(size_t arg_size, const char* args)
     }
     cache.entries[index] = entry;
     pthread_mutex_unlock(&cache_mutex);
-
-    print_cache();
 }
 
 void command_remove(size_t arg_size, const char* args)
 {
     char filename[FILENAME_SIZE];
-    for (int i = 0; i < arg_size + 1; i++)
+    for (int i = 0; i < FILENAME_SIZE || i < arg_size; i++)
     {
-        if (args[i] != ' ')
-        {
-            filename[i] = args[i];
-        } else
-        {
-            filename[i] = '\0';
-        }
+        filename[i] = args[i];
     }
-    for (int i = 0; i < CACHE_SIZE; i++)
-    {
-        if (strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid)
-        {
-            cache.entries[i].is_valid = false;
-            printf("===================\n");
-            printf("SUCCESSFULLY REMOVED FILE: %s\n", cache.entries[i].filename);
-            printf("===================\n");
-            break;
-        }
-            //this else statement is just saying if we've reached the end of the cache
-            //and the filename isn't in the cache at all, or if the file name is in the cache but we have already set it's "is_valid" property to false
-            //then we want to tell the user the file doesn't exist
-        else if ((strcmp(cache.entries[i].filename, filename) != 0 ||
-                  ((strcmp(cache.entries[i].filename, filename) == 0 && cache.entries[i].is_valid == false))) &&
-                 i == CACHE_SIZE)
-        {
-            printf("===================\n");
-            printf("SORRY BUT THE FILE YOU ARE ATTEMPTING TO REMOVE DOES NOT EXIST.\n");
-            printf("PLEASE CHECK SPELLING.\n");
-            printf("THE FILE NAME YOU TYPED WAS: %s\n", filename);
-            printf("===================\n");
 
-        }
+    int index = hash_filename(filename) % CACHE_SIZE;
+
+    pthread_mutex_lock(&cache_mutex);
+    if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid)
+    {
+        cache.entries[index].is_valid = false;
+        printf("===================\n");
+        printf("SUCCESSFULLY REMOVED FILE: %s\n", cache.entries[index].filename);
+        printf("===================\n");
+    } else if ((strcmp(cache.entries[index].filename, filename) != 0 ||
+                ((strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid == false))))
+    {
+        printf("===================\n");
+        printf("SORRY BUT THE FILE YOU ARE ATTEMPTING TO REMOVE DOES NOT EXIST.\n");
+        printf("PLEASE CHECK SPELLING.\n");
+        printf("THE FILE NAME YOU TYPED WAS: %s\n", filename);
+        printf("===================\n");
     }
+    pthread_mutex_unlock(&cache_mutex);
 }
 
 void process_input(size_t input_size, const char* input)
@@ -235,26 +219,22 @@ void process_input(size_t input_size, const char* input)
                 args_buffer[i - command_size - 1] = input[i];
             } else
             {
+                args_buffer[i - command_size - 1] = '\0';
                 break;
             }
         }
     }
 
-    printf("ARGS: %s\n", args_buffer);
-
     if (strcmp(command_buffer, "load") == 0)
     {
-        printf("LOAD\n");
         command_load(strlen(args_buffer), args_buffer);
     }
     if (strcmp(command_buffer, "store") == 0)
     {
-        printf("STORE\n");
         command_store(strlen(args_buffer), args_buffer);
     }
     if (strcmp(command_buffer, "rm") == 0)
     {
-        printf("DELETE\n");
         command_remove(strlen(args_buffer), args_buffer);
     }
 }
@@ -303,15 +283,15 @@ int main(int argc, char* argv[])
 		sigIntHandler.sa_handler = closeConnection;
 		sigIntHandler.sa_flags = 0;
 		sigaction(SIGINT, &sigIntHandler, NULL);
-    
+
 
 		// Start listening for up to 10 connections
 		listen(serverSocket, 10);
 
 		while (1) {
 			connectionToClient = accept(serverSocket, (struct sockaddr *) NULL, NULL);
-		
-			// Read command from client 
+
+			// Read command from client
 			while ((bytesRead = read(connectionToClient, receiveLine, BUF_SIZE)) > 0) {
 				// Put NULL terminator at end
 				receiveLine[bytesRead] = 0;
@@ -324,4 +304,4 @@ int main(int argc, char* argv[])
 			}
 		}
 
-}    
+}
