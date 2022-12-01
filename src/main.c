@@ -97,8 +97,9 @@ void command_load(size_t arg_size, const char* args)
         print_cache_specific(true, index);
     } else if (strcmp(cache.entries[index].filename, filename) != 0 || !cache.entries[index].is_valid)
     {
+        // just using 0 here as a null since we don't use the second parameter in this scenario anyway
         print_cache_specific(false,
-                             0);//just using 0 here as a null since we don't use the second paramater in this scenario anyway
+                             0);
     }
     pthread_mutex_unlock(&cache_mutex);
 }
@@ -242,10 +243,11 @@ void process_input(size_t input_size, const char* input)
 int serverSocket;
 
 // Function to close socket connections
-void closeConnection() {
-	printf("\nClosing Connection\n");
-	close(serverSocket);
-	exit(1);
+void closeConnection()
+{
+    printf("\nClosing Connection\n");
+    close(serverSocket);
+    exit(1);
 }
 
 int main(int argc, char* argv[])
@@ -255,53 +257,56 @@ int main(int argc, char* argv[])
 
     // These are the buffers to talk back and forth with the server
     char sendLine[BUF_SIZE];
-		char receiveLine[BUF_SIZE];
+    char receiveLine[BUF_SIZE];
 
 
-		int connectionToClient;
-		int bytesRead = 0;
+    int connectionToClient;
+    size_t bytesRead;
 
-		// Creating a server socket
-		serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-		struct sockaddr_in serverAddress;
-		bzero(&serverAddress, sizeof(serverAddress));
-		serverAddress.sin_family = AF_INET;
+    // Creating a server socket
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in serverAddress;
+    bzero(&serverAddress, sizeof(serverAddress));
+    serverAddress.sin_family = AF_INET;
 
-		// Configure to listen to any address and convert from host to network format
-		serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-		serverAddress.sin_port = htons(SERVER_PORT);
-
-
-		// Bind to port, error message if failure to bind
-		if (bind(serverSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) == -1) {
-			printf("Unable to bind to port\n");
-			exit(-1);
-		}
-
-		// Allows for Ctrl+C to close connection
-		struct sigaction sigIntHandler;
-		sigIntHandler.sa_handler = closeConnection;
-		sigIntHandler.sa_flags = 0;
-		sigaction(SIGINT, &sigIntHandler, NULL);
+    // Configure to listen to any address and convert from host to network format
+    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddress.sin_port = htons(SERVER_PORT);
 
 
-		// Start listening for up to 10 connections
-		listen(serverSocket, 10);
+    // Bind to port, error message if failure to bind
+    if (bind(serverSocket, (struct sockaddr*) &serverAddress, sizeof(serverAddress)) == -1)
+    {
+        printf("Unable to bind to port\n");
+        exit(-1);
+    }
 
-		while (1) {
-			connectionToClient = accept(serverSocket, (struct sockaddr *) NULL, NULL);
+    // Allows for Ctrl+C to close connection
+    struct sigaction sigIntHandler;
+    sigIntHandler.sa_handler = closeConnection;
+    sigIntHandler.sa_flags = 0;
+    sigaction(SIGINT, &sigIntHandler, NULL);
 
-			// Read command from client
-			while ((bytesRead = read(connectionToClient, receiveLine, BUF_SIZE)) > 0) {
-				// Put NULL terminator at end
-				receiveLine[bytesRead] = 0;
 
-				// Start thread to handle command input
-				pthread_t processThread;
-				//pthread_create(&processThread, NULL, process_input, (void *))
-				// Need to change process_input to allow for threading
+    // Start listening for up to 10 connections
+    listen(serverSocket, 10);
 
-			}
-		}
+    while (true)
+    {
+        connectionToClient = accept(serverSocket, (struct sockaddr*) NULL, NULL);
+
+        // Read command from client
+        while ((bytesRead = read(connectionToClient, receiveLine, BUF_SIZE)) > 0)
+        {
+            // Put NULL terminator at end
+            receiveLine[bytesRead] = 0;
+
+            // Start thread to handle command input
+            pthread_t processThread;
+            //pthread_create(&processThread, NULL, process_input, (void *))
+            // Need to change process_input to allow for threading
+
+        }
+    }
 
 }
