@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 #define SERVER_PORT 1052 // we have 1050 range
-#define BUF_SIZE 256
+#define DATA_IN_SIZE 256
 
 #define CACHE_SIZE 8
 #define FILENAME_SIZE 256
@@ -18,7 +18,7 @@
 
 #define MAX_THREADS 8
 
-#define MAX_OUTPUT 128
+#define OUTPUT_SIZE 128
 
 typedef struct {
     char filename[FILENAME_SIZE];
@@ -36,6 +36,8 @@ typedef struct {
     bool is_running;
 } Thread;
 
+// Struct for data input for process_input function
+// Using struct for multi-threading purposes
 typedef struct {
     size_t size;
     char *data;
@@ -48,6 +50,8 @@ Cache cache;
 
 pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 Thread threads[MAX_THREADS];
+
+int server_socket;
 
 void send_string(int connection, const char *str)
 {
@@ -62,6 +66,7 @@ int hash_filename(char *filename)
 
 void command_load(size_t arg_size, const char *args, int connection)
 {
+    // Parse filename
     char filename[FILENAME_SIZE];
     for (int i = 0; i < arg_size + 1; i++) {
         if (args[i] != ' ') {
@@ -76,12 +81,12 @@ void command_load(size_t arg_size, const char *args, int connection)
 
     pthread_mutex_lock(&cache_mutex);
     if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid) {
-        char output[MAX_OUTPUT];
+        char output[OUTPUT_SIZE];
         snprintf(output, sizeof(output), "%d:%s\n", cache.entries[index].n_bytes, cache.entries[index].p_contents);
         send_string(connection, output);
     }
     else {
-        char output[MAX_OUTPUT];
+        char output[OUTPUT_SIZE];
         snprintf(output, sizeof(output), "0:\n");
         send_string(connection, output);
     }
@@ -160,12 +165,13 @@ void command_remove(size_t arg_size, const char *args)
     pthread_mutex_unlock(&cache_mutex);
 }
 
+// Called in thread
 void *process_input(void *input_ptr)
 {
     Input input = *((Input *)(input_ptr));
 
     char command_buffer[10];
-    int command_size = 0; // NOTE: Might be off by 1
+    int command_size = 0;
     char args_buffer[100];
     bool is_command = true;
     for (int i = 0; i < input.size; i++) {
@@ -204,73 +210,73 @@ void *process_input(void *input_ptr)
     threads[input.thread_index].is_running = false;
     pthread_mutex_unlock(&thread_mutex);
 
-    return NULL;
+    pthread_exit(EXIT_SUCCESS);
 }
 
-int serverSocket;
-
 // Function to close socket connections
-void closeConnection()
+void close_connection()
 {
     printf("\nClosing Connection\n");
-    close(serverSocket);
-    exit(1);
+    close(server_socket);
+    exit(EXIT_SUCCESS);
 }
 
 int main()
 {
+    // Zero-initialize global data
     memset(&cache, 0, sizeof(Cache));
     memset(&threads, 0, sizeof(threads));
 
-    char receiveLine[BUF_SIZE];
+    int connection;
+    size_t n_bytes_in;
 
-    int connectionToClient;
-    size_t bytesRead;
-
-    // Creating a server socket
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in serverAddress;
-    bzero(&serverAddress, sizeof(serverAddress));
-    serverAddress.sin_family = AF_INET;
+    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in server_addr;
+    bzero(&server_addr, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
 
     // Configure to listen to any address and convert from host to network format
-    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-    serverAddress.sin_port = htons(SERVER_PORT);
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(SERVER_PORT);
 
     // Bind to port, error message if failure to bind
-    if (bind(serverSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
+    if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
         printf("Unable to bind to port\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     // Allows for Ctrl+C to close connection
-    struct sigaction sigIntHandler;
-    sigIntHandler.sa_handler = closeConnection;
-    sigIntHandler.sa_flags = 0;
-    sigaction(SIGINT, &sigIntHandler, NULL);
+    struct sigaction interrupt_handler;
+    interrupt_handler.sa_handler = close_connection;
+    interrupt_handler.sa_flags = 0;
+    sigaction(SIGINT, &interrupt_handler, NULL);
 
     // Start listening for up to 10 connections
-    listen(serverSocket, 10);
+    listen(server_socket, 10);
+
+    // data received from network
+    char data_in[DATA_IN_SIZE];
 
     while (true) {
-        connectionToClient = accept(serverSocket, (struct sockaddr *)NULL, NULL);
+        connection = accept(server_socket, (struct sockaddr *)NULL, NULL);
 
         // Read command from client
-        while ((bytesRead = read(connectionToClient, receiveLine, BUF_SIZE)) > 0) {
+        while ((n_bytes_in = read(connection, data_in, DATA_IN_SIZE)) > 0) {
             // Put NULL terminator at end
-            receiveLine[bytesRead] = '\0';
+            data_in[n_bytes_in] = '\0';
 
             // Terminate newline from input if present
-            for (int i = 0; i < BUF_SIZE; i++) {
-                if (receiveLine[i] == '\n') {
-                    receiveLine[i] = '\0';
+            for (int i = 0; i < DATA_IN_SIZE; i++) {
+                if (data_in[i] == '\n') {
+                    data_in[i] = '\0';
                     break;
                 }
-                else if (receiveLine[i] == '\0') {
+                else if (data_in[i] == '\0') {
                     break;
                 }
             }
 
+            // Find available space in threads array
             int thread_index = -1;
             pthread_mutex_lock(&thread_mutex);
             for (int i = 0; i < MAX_THREADS; i++) {
@@ -282,18 +288,15 @@ int main()
             }
             pthread_mutex_unlock(&thread_mutex);
 
+            // If valid location found, create and run thread
             if (thread_index != -1) {
                 Input input;
-                input.size = bytesRead + 1;
-                input.data = receiveLine;
+                input.size = n_bytes_in + 1;
+                input.data = data_in;
                 input.thread_index = thread_index;
-                input.connection = connectionToClient;
-                // Start thread to handle command input
+                input.connection = connection;
                 pthread_create(&(threads[thread_index].thread), NULL, process_input, &input);
             }
-
-            // pthread_create(&processThread, NULL, process_input, (void *))
-            //  Need to change process_input to allow for threading
         }
     }
 }
