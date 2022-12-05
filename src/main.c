@@ -1,4 +1,3 @@
-#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
@@ -18,6 +17,8 @@
 #define FILE_CONTENT_SIZE 1024
 
 #define MAX_THREADS 8
+
+#define MAX_OUTPUT 128
 
 typedef struct {
     char filename[FILENAME_SIZE];
@@ -39,6 +40,7 @@ typedef struct {
     size_t size;
     char *data;
     int thread_index;
+    int connection;
 } Input;
 
 pthread_mutex_t cache_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -47,37 +49,10 @@ Cache cache;
 pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 Thread threads[MAX_THREADS];
 
-void print_cache_specific(bool existsInCache, int entryIndex)
+void send_string(int connection, const char *str)
 {
-    printf("\nCACHE:\n");
-    if (existsInCache == 1 && entryIndex < 8) {
-        printf("===================\n");
-        printf("FILENAME: %s\n", cache.entries[entryIndex].filename);
-        printf("BYTES: %d\n", cache.entries[entryIndex].n_bytes);
-        printf("CONTENTS: %s\n", cache.entries[entryIndex].p_contents);
-        printf("===================\n");
-    }
-    else {
-        printf("===================\n");
-        printf("FILENAME: FILE DOES NOT EXIST\n");
-        printf("BYTES: 0\n");
-        printf("CONTENTS: \n");
-        printf("===================\n");
-    }
-}
-
-void print_cache()
-{
-    printf("\nCACHE:\n");
-    for (int i = 0; i < CACHE_SIZE; i++) {
-        if (cache.entries[i].is_valid) {
-            printf("===================\n");
-            printf("FILENAME: %s\n", cache.entries[i].filename);
-            printf("BYTES: %d\n", cache.entries[i].n_bytes);
-            printf("CONTENTS: %s\n", cache.entries[i].p_contents);
-            printf("===================\n");
-        }
-    }
+    // Send the string over the network
+    write(connection, str, strlen(str));
 }
 
 int hash_filename(char *filename)
@@ -85,7 +60,7 @@ int hash_filename(char *filename)
     return (int)(filename[0]);
 }
 
-void command_load(size_t arg_size, const char *args)
+void command_load(size_t arg_size, const char *args, int connection)
 {
     char filename[FILENAME_SIZE];
     for (int i = 0; i < arg_size + 1; i++) {
@@ -101,11 +76,14 @@ void command_load(size_t arg_size, const char *args)
 
     pthread_mutex_lock(&cache_mutex);
     if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid) {
-        print_cache_specific(true, index);
+        char output[MAX_OUTPUT];
+        snprintf(output, sizeof(output), "%d:%s\n", cache.entries[index].n_bytes, cache.entries[index].p_contents);
+        send_string(connection, output);
     }
     else {
-        // just using 0 here as a null since we don't use the second parameter in this scenario anyway
-        print_cache_specific(false, 0);
+        char output[MAX_OUTPUT];
+        snprintf(output, sizeof(output), "0:\n");
+        send_string(connection, output);
     }
     pthread_mutex_unlock(&cache_mutex);
 }
@@ -150,7 +128,10 @@ void command_store(size_t arg_size, const char *args)
     CacheEntry entry;
     entry.is_valid = true;
     strcpy(entry.filename, filename);
-    entry.n_bytes = atoi(n_bytes_str);
+
+    char *end_ptr;
+    entry.n_bytes = (int)strtol(n_bytes_str, &end_ptr, 10);
+
     entry.p_contents = contents;
 
     int index = hash_filename(filename) % CACHE_SIZE;
@@ -175,17 +156,6 @@ void command_remove(size_t arg_size, const char *args)
     pthread_mutex_lock(&cache_mutex);
     if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid) {
         cache.entries[index].is_valid = false;
-        printf("===================\n");
-        printf("SUCCESSFULLY REMOVED FILE: %s\n", cache.entries[index].filename);
-        printf("===================\n");
-    }
-    else if ((strcmp(cache.entries[index].filename, filename) != 0
-              || ((strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid == false)))) {
-        printf("===================\n");
-        printf("SORRY BUT THE FILE YOU ARE ATTEMPTING TO REMOVE DOES NOT EXIST.\n");
-        printf("PLEASE CHECK SPELLING.\n");
-        printf("THE FILE NAME YOU TYPED WAS: %s\n", filename);
-        printf("===================\n");
     }
     pthread_mutex_unlock(&cache_mutex);
 }
@@ -221,7 +191,7 @@ void *process_input(void *input_ptr)
     }
 
     if (strcmp(command_buffer, "load") == 0) {
-        command_load(strlen(args_buffer), args_buffer);
+        command_load(strlen(args_buffer), args_buffer, input.connection);
     }
     if (strcmp(command_buffer, "store") == 0) {
         command_store(strlen(args_buffer), args_buffer);
@@ -247,13 +217,11 @@ void closeConnection()
     exit(1);
 }
 
-int main(int argc, char *argv[])
+int main()
 {
     memset(&cache, 0, sizeof(Cache));
     memset(&threads, 0, sizeof(threads));
 
-    // These are the buffers to talk back and forth with the server
-    char sendLine[BUF_SIZE];
     char receiveLine[BUF_SIZE];
 
     int connectionToClient;
@@ -319,6 +287,7 @@ int main(int argc, char *argv[])
                 input.size = bytesRead + 1;
                 input.data = receiveLine;
                 input.thread_index = thread_index;
+                input.connection = connectionToClient;
                 // Start thread to handle command input
                 pthread_create(&(threads[thread_index].thread), NULL, process_input, &input);
             }
