@@ -17,6 +17,8 @@
 #define FILENAME_SIZE 256
 #define FILE_CONTENT_SIZE 1024
 
+#define MAX_THREADS 8
+
 typedef struct {
     char filename[FILENAME_SIZE];
     int n_bytes;
@@ -28,8 +30,22 @@ typedef struct {
     CacheEntry entries[CACHE_SIZE];
 } Cache;
 
+typedef struct {
+    pthread_t thread;
+    bool is_running;
+} Thread;
+
+typedef struct {
+    size_t size;
+    char *data;
+    int thread_index;
+} Input;
+
 pthread_mutex_t cache_mutex = PTHREAD_MUTEX_INITIALIZER;
 Cache cache;
+
+pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
+Thread threads[MAX_THREADS];
 
 void print_cache_specific(bool existsInCache, int entryIndex)
 {
@@ -44,7 +60,7 @@ void print_cache_specific(bool existsInCache, int entryIndex)
     else {
         printf("===================\n");
         printf("FILENAME: FILE DOES NOT EXIST\n");
-        printf("BYTES: 0");
+        printf("BYTES: 0\n");
         printf("CONTENTS: \n");
         printf("===================\n");
     }
@@ -87,7 +103,7 @@ void command_load(size_t arg_size, const char *args)
     if (strcmp(cache.entries[index].filename, filename) == 0 && cache.entries[index].is_valid) {
         print_cache_specific(true, index);
     }
-    else if (strcmp(cache.entries[index].filename, filename) != 0 || !cache.entries[index].is_valid) {
+    else {
         // just using 0 here as a null since we don't use the second parameter in this scenario anyway
         print_cache_specific(false, 0);
     }
@@ -174,19 +190,18 @@ void command_remove(size_t arg_size, const char *args)
     pthread_mutex_unlock(&cache_mutex);
 }
 
-void process_input(size_t input_size, const char *input)
+void *process_input(void *input_ptr)
 {
-    // receiveLine[bytesRead] = 0; // Make sure we put the null terminator at the end of the buffer
-    // printf("Received %d bytes from server with message: %s\n", bytesRead, receiveLine);
+    Input input = *((Input *)(input_ptr));
 
     char command_buffer[10];
     int command_size = 0; // NOTE: Might be off by 1
     char args_buffer[100];
     bool is_command = true;
-    for (int i = 0; i < input_size; i++) {
+    for (int i = 0; i < input.size; i++) {
         if (is_command) {
-            if (input[i] != ' ') {
-                command_buffer[i] = input[i];
+            if (input.data[i] != ' ') {
+                command_buffer[i] = input.data[i];
             }
             else {
                 command_buffer[i] = '\0';
@@ -195,8 +210,8 @@ void process_input(size_t input_size, const char *input)
             }
         }
         else {
-            if (input[i] != '\0') {
-                args_buffer[i - command_size - 1] = input[i];
+            if (input.data[i] != '\0') {
+                args_buffer[i - command_size - 1] = input.data[i];
             }
             else {
                 args_buffer[i - command_size - 1] = '\0';
@@ -214,6 +229,12 @@ void process_input(size_t input_size, const char *input)
     if (strcmp(command_buffer, "rm") == 0) {
         command_remove(strlen(args_buffer), args_buffer);
     }
+
+    pthread_mutex_lock(&thread_mutex);
+    threads[input.thread_index].is_running = false;
+    pthread_mutex_unlock(&thread_mutex);
+
+    return NULL;
 }
 
 int serverSocket;
@@ -229,6 +250,7 @@ void closeConnection()
 int main(int argc, char *argv[])
 {
     memset(&cache, 0, sizeof(Cache));
+    memset(&threads, 0, sizeof(threads));
 
     // These are the buffers to talk back and forth with the server
     char sendLine[BUF_SIZE];
@@ -268,10 +290,39 @@ int main(int argc, char *argv[])
         // Read command from client
         while ((bytesRead = read(connectionToClient, receiveLine, BUF_SIZE)) > 0) {
             // Put NULL terminator at end
-            receiveLine[bytesRead] = 0;
+            receiveLine[bytesRead] = '\0';
 
-            // Start thread to handle command input
-            pthread_t processThread;
+            // Terminate newline from input if present
+            for (int i = 0; i < BUF_SIZE; i++) {
+                if (receiveLine[i] == '\n') {
+                    receiveLine[i] = '\0';
+                    break;
+                }
+                else if (receiveLine[i] == '\0') {
+                    break;
+                }
+            }
+
+            int thread_index = -1;
+            pthread_mutex_lock(&thread_mutex);
+            for (int i = 0; i < MAX_THREADS; i++) {
+                if (threads[i].is_running == false) {
+                    threads[i].is_running = true;
+                    thread_index = i;
+                    break;
+                }
+            }
+            pthread_mutex_unlock(&thread_mutex);
+
+            if (thread_index != -1) {
+                Input input;
+                input.size = bytesRead + 1;
+                input.data = receiveLine;
+                input.thread_index = thread_index;
+                // Start thread to handle command input
+                pthread_create(&(threads[thread_index].thread), NULL, process_input, &input);
+            }
+
             // pthread_create(&processThread, NULL, process_input, (void *))
             //  Need to change process_input to allow for threading
         }
