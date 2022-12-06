@@ -222,6 +222,7 @@ void close_connection()
 }
 
 int main()
+    
 {
     // Zero-initialize global data
     memset(&cache, 0, sizeof(Cache));
